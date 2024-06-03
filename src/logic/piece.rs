@@ -1,4 +1,5 @@
 use crate::states::AppState;
+use bitflags::bitflags;
 
 use super::{
     board::{get_best_next_move, BoardRecource},
@@ -33,21 +34,6 @@ impl Plugin for PiecePlugin {
     }
 }
 
-#[derive(Default, Copy, Clone, Hash, PartialEq, Eq, Debug)]
-pub enum PieceTypes {
-    #[default]
-    Pawn,
-    Rook,
-    Knight,
-    Bishop,
-    Queen,
-    King,
-    Jester,
-    Amazon,
-    GrandCommander,
-    Abbess,
-}
-
 #[derive(Resource, Default)]
 pub struct PieceData {
     mesh_handle: Mesh2dHandle,
@@ -72,7 +58,14 @@ macro_rules! load_piece_image {
 }
 
 macro_rules! build_piece_data {
-    ($enum_name:ident { $( $variant:ident ),* }) => {
+    ($enum_name:ident, [$( $variant:ident,)*] ) => {
+
+        #[derive(Default, Copy, Clone, Hash, PartialEq, Eq, Debug)]
+        pub enum $enum_name {
+            #[default]
+            $( $variant, )*
+        }
+
         fn init_pieces_recources(
             mut meshes: ResMut<Assets<Mesh>>,
             asset_server: Res<AssetServer>,
@@ -99,18 +92,21 @@ macro_rules! build_piece_data {
     };
 }
 
-build_piece_data!(PieceTypes {
-    Pawn,
-    Rook,
-    Knight,
-    Bishop,
-    Queen,
-    King,
-    Jester,
-    Amazon,
-    GrandCommander,
-    Abbess
-});
+build_piece_data!(
+    PieceTypes,
+    [
+        Pawn,
+        Rook,
+        Knight,
+        Bishop,
+        Queen,
+        King,
+        Jester,
+        Amazon,
+        GrandCommander,
+        Abbess,
+    ]
+);
 
 // ---------------------------------------------------------------
 
@@ -129,20 +125,56 @@ pub struct PieceBundle<M: bevy::sprite::Material2d> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct Rules {
+    pub movment_rules: MovementsRules,
+    pub step_over_rule: bool,
+    pub max_distance: Option<i32>,
+    pub multiple_direction_rule: bool,
+}
+
+impl Rules {
+    pub fn new(
+        movment_rules: MovementsRules,
+        step_over: bool,
+        max_distance: Option<i32>,
+        multi_direction: bool,
+    ) -> Self {
+        Rules {
+            movment_rules,
+            step_over_rule: step_over,
+            max_distance,
+            multiple_direction_rule: multi_direction,
+        }
+    }
+}
+
+bitflags! {
+    pub struct MovementsRules: u32 {
+        const PAWN_MOVMENT = 1 << 0;
+        const VERTICAL_MOVMENT = 1 << 1;
+        const HORIZONTAL_MOVMENT = 1 << 2;
+        const DIAGONAL_MOVMENT = 1 << 3;
+        const SHIFT_STEP_MOVMENT = 1 << 4;
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct Piece {
     piece_type: PieceTypes,
     color: bool,
     has_moved: bool,
     id: Option<Entity>,
+    rules: Rules,
 }
 
 impl Piece {
-    pub fn new(piece_type: PieceTypes, color: bool) -> Self {
+    pub fn new(piece_type: PieceTypes, color: bool, rules: Rules) -> Self {
         Piece {
             piece_type,
             color,
             has_moved: false,
             id: None,
+            rules,
         }
     }
     pub fn get_id(&self) -> Option<Entity> {
@@ -159,6 +191,9 @@ impl Piece {
     }
     pub fn set_has_moved(&mut self) {
         self.has_moved = true;
+    }
+    pub fn get_rules(&self) -> Rules {
+        self.rules
     }
 }
 
