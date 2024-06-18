@@ -1,8 +1,9 @@
 use crate::states::AppState;
 use bitflags::bitflags;
+use serde::{Deserialize, Serialize};
 
 use super::{
-    board::{get_best_next_move, BoardRecource},
+    board::{get_best_next_move, BoardRecource, PieceResult},
     GRID_BLOCK_SIZE, GRID_SIZE, SQUARE_SIZE, TILE_NUMBER,
 };
 use bevy::{
@@ -60,7 +61,7 @@ macro_rules! load_piece_image {
 macro_rules! build_piece_data {
     ($enum_name:ident, [$( $variant:ident,)*] ) => {
 
-        #[derive(Default, Copy, Clone, Hash, PartialEq, Eq, Debug)]
+        #[derive(Default, Copy, Clone, Hash, PartialEq, Eq, Debug, Serialize, Deserialize)]
         pub enum $enum_name {
             #[default]
             $( $variant, )*
@@ -105,6 +106,7 @@ build_piece_data!(
         Amazon,
         GrandCommander,
         Abbess,
+        ShortRook,
     ]
 );
 
@@ -124,7 +126,7 @@ pub struct PieceBundle<M: bevy::sprite::Material2d> {
     pub sprite: MaterialMesh2dBundle<M>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Rules {
     pub movment_rules: MovementsRules,
     pub step_over_rule: bool,
@@ -148,7 +150,61 @@ impl Rules {
     }
 }
 
+impl Rules {
+    pub fn get_rules(piece_type: PieceTypes) -> Self {
+        match piece_type {
+            PieceTypes::Pawn => Rules::new(MovementsRules::PAWN_MOVMENT, false, Some(3), false),
+            PieceTypes::Rook => Rules::new(
+                MovementsRules::HORIZONTAL_MOVMENT | MovementsRules::VERTICAL_MOVMENT,
+                false,
+                None,
+                true,
+            ),
+            PieceTypes::Bishop => Rules::new(MovementsRules::DIAGONAL_MOVMENT, false, None, true),
+            PieceTypes::Knight => {
+                Rules::new(MovementsRules::SHIFT_STEP_MOVMENT, true, Some(5), true)
+            }
+            PieceTypes::Queen => Rules::new(
+                MovementsRules::DIAGONAL_MOVMENT
+                    | MovementsRules::HORIZONTAL_MOVMENT
+                    | MovementsRules::VERTICAL_MOVMENT,
+                false,
+                None,
+                true,
+            ),
+            PieceTypes::King => Rules::new(
+                MovementsRules::DIAGONAL_MOVMENT
+                    | MovementsRules::HORIZONTAL_MOVMENT
+                    | MovementsRules::VERTICAL_MOVMENT,
+                false,
+                Some(1),
+                true,
+            ),
+            PieceTypes::Jester => Rules::new(MovementsRules::PAWN_MOVMENT, true, Some(2), true),
+            PieceTypes::Amazon => Rules::new(
+                MovementsRules::DIAGONAL_MOVMENT
+                    | MovementsRules::HORIZONTAL_MOVMENT
+                    | MovementsRules::VERTICAL_MOVMENT,
+                false,
+                Some(4),
+                true,
+            ),
+            PieceTypes::GrandCommander => {
+                Rules::new(MovementsRules::SHIFT_STEP_MOVMENT, true, Some(24), true)
+            }
+            PieceTypes::Abbess => Rules::new(MovementsRules::PAWN_MOVMENT, true, Some(2), true),
+            PieceTypes::ShortRook => Rules::new(
+                MovementsRules::HORIZONTAL_MOVMENT | MovementsRules::VERTICAL_MOVMENT,
+                true,
+                Some(1),
+                true,
+            ),
+        }
+    }
+}
+
 bitflags! {
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     pub struct MovementsRules: u32 {
         const PAWN_MOVMENT = 1 << 0;
         const VERTICAL_MOVMENT = 1 << 1;
@@ -158,7 +214,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Piece {
     piece_type: PieceTypes,
     color: bool,
@@ -194,6 +250,13 @@ impl Piece {
     }
     pub fn get_rules(&self) -> Rules {
         self.rules
+    }
+    pub fn promote(&mut self, t: PieceTypes) {
+        self.piece_type = t;
+        self.rules = Rules::get_rules(t);
+    }
+    pub fn set_color(&mut self, color: bool) {
+        self.color = color;
     }
 }
 
@@ -304,13 +367,15 @@ fn render_possible_routes(
 }
 
 fn select_piece(
-    // mut commands: Commands,
+    mut commands: Commands,
     mut mouse: EventReader<MouseButtonInput>,
     mut board: ResMut<BoardRecource>,
     mut selected_piece: ResMut<SelectedPiece>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
     q_windows: Query<&Window, With<PrimaryWindow>>,
     q_camera: Query<(&Camera, &GlobalTransform)>,
-    mut pieces: Query<&mut Transform, With<ComponentPiece>>,
+    mut pieces: Query<(&mut Transform, &mut Handle<ColorMaterial>), With<ComponentPiece>>,
+    piece_recourecs: Res<PieceData>,
 ) {
     for ev in mouse.read() {
         match ev.state {
@@ -327,7 +392,7 @@ fn select_piece(
                     if let Some(piece) = board.grid[cords] {
                         let id = piece.get_id().unwrap();
                         if let Ok(mut component) = pieces.get_mut(id) {
-                            component.scale -= Vec3::splat(SQUARE_SIZE / 2.0);
+                            component.0.scale -= Vec3::splat(SQUARE_SIZE / 2.0);
                         }
                     }
                 }
@@ -341,8 +406,28 @@ fn select_piece(
                         Some(src) => {
                             let result = board.move_piece(src, cords);
                             for res in result {
-                                if let Ok(mut component) = pieces.get_mut(res.0) {
-                                    component.translation = from_index_to_srceen_position(res.1);
+                                if let Ok((mut component, mut img_handle)) = pieces.get_mut(res.0) {
+                                    match res.1 {
+                                        PieceResult::None() => {}
+                                        PieceResult::Moved(dst) => {
+                                            component.translation =
+                                                from_index_to_srceen_position(dst);
+                                        }
+                                        PieceResult::Captured() => {
+                                            commands.entity(res.0).despawn();
+                                        }
+                                        PieceResult::Promoted(dst, ptype, color) => {
+                                            println!("promoted");
+                                            component.translation =
+                                                from_index_to_srceen_position(dst);
+                                            *img_handle =
+                                                materials.add(piece_recourecs.get(ptype, color));
+                                        }
+                                        PieceResult::Changed(ptype, color) => {
+                                            *img_handle =
+                                                materials.add(piece_recourecs.get(ptype, color));
+                                        }
+                                    }
                                 }
                             }
                             selected_piece.selected = None;
@@ -355,7 +440,7 @@ fn select_piece(
                         Some(piece) => {
                             let id = piece.get_id().unwrap();
                             if let Ok(mut component) = pieces.get_mut(id) {
-                                component.scale += Vec3::splat(SQUARE_SIZE / 2.0);
+                                component.0.scale += Vec3::splat(SQUARE_SIZE / 2.0);
                             }
                         }
                         None => {

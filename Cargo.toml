@@ -7,7 +7,9 @@ edition = "2021"
 
 [dependencies]
 bevy = { version = "0.13.2", features = ["dynamic_linking"] }
-bitflags = "*"
+bitflags = "2.5.0"
+serde = "1.0.203"
+bevy_pkv = "0.10.0"
 
 [workspace]
 resolver = "2" # Important! wgpu/Bevy needs this!

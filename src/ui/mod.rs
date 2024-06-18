@@ -1,7 +1,9 @@
 use self::{game_menu::GameMenuUI, main_menu::main_menu_setup, settings::settings_menu_setup};
 use crate::states::{AppState, GameVolue};
 use bevy::{app::AppExit, prelude::*};
+use board_setup::board_setup_menu_setup;
 
+pub mod board_setup;
 pub mod game_menu;
 pub mod main_menu;
 pub mod settings;
@@ -23,6 +25,12 @@ impl Plugin for GameUI {
             .add_systems(
                 OnExit(MenuState::Main),
                 despawn_screen::<main_menu::OnMainMenuScreen>,
+            )
+            // Systems to handle the board setup menu screen
+            .add_systems(OnEnter(MenuState::BoardSetup), board_setup_menu_setup)
+            .add_systems(
+                OnExit(MenuState::BoardSetup),
+                despawn_screen::<board_setup::OnBoardSetupScreen>,
             )
             // Systems to handle the settings menu screen
             .add_systems(OnEnter(MenuState::Settings), settings_menu_setup)
@@ -55,6 +63,7 @@ enum MenuState {
     Settings,
     SettingsDisplay,
     SettingsSound,
+    BoardSetup,
     #[default]
     Disabled,
 }
@@ -86,6 +95,7 @@ enum MenuButtonAction {
     BackToMainMenu,
     BackToSettings,
     Quit,
+    BoardSetup,
 }
 
 // This system handles changing all buttons color based on mouse interaction
@@ -240,16 +250,11 @@ fn menu_action(
                     menu_state.set(MenuState::Disabled);
                 }
                 MenuButtonAction::Settings => menu_state.set(MenuState::Settings),
-                MenuButtonAction::SettingsDisplay => {
-                    menu_state.set(MenuState::SettingsDisplay);
-                }
-                MenuButtonAction::SettingsSound => {
-                    menu_state.set(MenuState::SettingsSound);
-                }
+                MenuButtonAction::SettingsDisplay => menu_state.set(MenuState::SettingsDisplay),
+                MenuButtonAction::SettingsSound => menu_state.set(MenuState::SettingsSound),
                 MenuButtonAction::BackToMainMenu => menu_state.set(MenuState::Main),
-                MenuButtonAction::BackToSettings => {
-                    menu_state.set(MenuState::Settings);
-                }
+                MenuButtonAction::BackToSettings => menu_state.set(MenuState::Settings),
+                MenuButtonAction::BoardSetup => menu_state.set(MenuState::BoardSetup),
             }
         }
     }

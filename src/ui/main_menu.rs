@@ -122,7 +122,7 @@ pub fn main_menu_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                     parent
                         .spawn((
                             ButtonBundle {
-                                style: button_style,
+                                style: button_style.clone(),
                                 background_color: NORMAL_BUTTON.into(),
                                 ..default()
                             },
@@ -131,11 +131,33 @@ pub fn main_menu_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                         .with_children(|parent| {
                             let icon = asset_server.load("textures/Game Icons/exitRight.png");
                             parent.spawn(ImageBundle {
-                                style: button_icon_style,
+                                style: button_icon_style.clone(),
                                 image: UiImage::new(icon),
                                 ..default()
                             });
-                            parent.spawn(TextBundle::from_section("Quit", button_text_style));
+                            parent
+                                .spawn(TextBundle::from_section("Quit", button_text_style.clone()));
+                        });
+                    parent
+                        .spawn((
+                            ButtonBundle {
+                                style: button_style.clone(),
+                                background_color: NORMAL_BUTTON.into(),
+                                ..default()
+                            },
+                            MenuButtonAction::BoardSetup,
+                        ))
+                        .with_children(|parent| {
+                            let icon = asset_server.load("textures/Game Icons/exitRight.png");
+                            parent.spawn(ImageBundle {
+                                style: button_icon_style.clone(),
+                                image: UiImage::new(icon),
+                                ..default()
+                            });
+                            parent.spawn(TextBundle::from_section(
+                                "Config Board",
+                                button_text_style.clone(),
+                            ));
                         });
                 });
         });

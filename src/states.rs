@@ -6,6 +6,7 @@ pub enum AppState {
     #[default]
     InGame,
     LoadingScreen,
+    BoardSetup,
 }
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
